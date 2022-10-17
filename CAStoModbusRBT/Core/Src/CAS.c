@@ -11,6 +11,7 @@
 #include <stdlib.h>
 
 extern uint8_t rs232_inputBuffer[64];
+extern uint8_t modbusInputBuffer[64];
 uint8_t CAS_inputSize = 0;
 uint8_t MODBUS_InputSize = 0;
 uint8_t CAS_RX_Flag = 0;
@@ -23,11 +24,13 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 	if (huart->Instance == USART1){
 		CAS_inputSize = Size;
 		CAS_RX_Flag = 1;
+		HAL_UARTEx_ReceiveToIdle_DMA(huart, rs232_inputBuffer, 64);
 	} else if (huart->Instance == USART2) {
 		MODBUS_InputSize = Size;
 		MODBUS_RX_Flag = 1;
+		HAL_UARTEx_ReceiveToIdle_DMA(huart, modbusInputBuffer, 64);
 	}
-	HAL_UARTEx_ReceiveToIdle_DMA(huart, rs232_inputBuffer, 64);
+
 }
 
 
