@@ -9,6 +9,8 @@
 #define INC_MODBUS_H_
 
 #include "main.h"
+#include "CAS.h"
+
 
 #define MODBUS_SLAVE_ADDRESS	0x01
 
@@ -26,7 +28,22 @@ typedef struct _modbusRequest {
 	uint8_t functionalCode;
 	uint16_t registerAddress;
 	uint16_t registersNumber;
-}modbusRequest;
+	uint16_t crc;
+}modbusRequest_t;
+
+typedef struct _modbusRxData {
+	uint8_t modbusRxBuffer[64];
+	uint8_t modbusRxSize;
+	uint8_t modbusRxFlag;
+}modbusRxData_t;
+
+typedef struct _modbusData {
+	modbusRequest_t request;
+	uint8_t modbusResp[32];
+	modbusRxData_t rxData;
+}modbusData_t;
+
+extern modbusData_t modbusData;
 
 
 #endif /* INC_MODBUS_H_ */

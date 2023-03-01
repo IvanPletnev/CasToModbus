@@ -10,39 +10,57 @@
 
 #include "main.h"
 #include "stm32f1xx_hal.h"
+#include "cmsis_os.h"
 
-#define CAS_PACKET_SIZE		22
+#define CAS_WEIGHT_SIZE		22
+#define CAS_RESPONSE_SIZE	7
+#define CAS_BUFFER_SIZE		64
 
 
 typedef enum {
 	UNSTABLE,
 	STABLE,
 	OVERLOAD
-}stabFactor;
+}stabFactor_t;
 
 typedef enum {
 	GROSS,
 	NET
-}grossNet;
+}grossNet_t;
 
 typedef enum {
 	KILOGRAM,
 	TON
-}weightUnit;
+}weightUnit_t;
+
+typedef enum {
+	READY,
+	BUSY
+}UART_Status_t;
+
+typedef struct _casRxData {
+	uint8_t casRxBuffer[32];
+	uint8_t casRxSize;
+}casRxData_t;
 
 typedef struct _CAS_Data {
 
-	uint8_t parsingIssOk;
-	stabFactor stability;
-	grossNet grossOrNet;
+	uint8_t parsingIsOk;
+	stabFactor_t stability;
+	grossNet_t grossOrNet;
 	uint8_t deviceId;
 	uint8_t lampConditionByte;
-	int32_t weightData;
+	int32_t weightValue;
 	uint8_t DP_position;
-	weightUnit unit;
+	weightUnit_t unit;
+	casRxData_t casRxData;
 
-}CAS_Data;
+}CAS_Data_t;
 
+extern CAS_Data_t casData;
+extern UART_Status_t uart1status;
 
+uint8_t CAS_Parcer (CAS_Data_t *data, casRxData_t *source);
+void uartTxTask (void *argument);
 
 #endif /* INC_CAS_H_ */
