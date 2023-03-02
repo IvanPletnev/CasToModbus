@@ -38,13 +38,17 @@ typedef enum {
 	BUSY
 }UART_Status_t;
 
+typedef enum _CAS_Mode {
+	CAS_WEIGHT,
+	CAS_SETTINGS
+}CAS_Mode_t;
+
 typedef struct _casRxData {
 	uint8_t casRxBuffer[32];
 	uint8_t casRxSize;
 }casRxData_t;
 
 typedef struct _CAS_Data {
-
 	uint8_t parsingIsOk;
 	stabFactor_t stability;
 	grossNet_t grossOrNet;
@@ -54,7 +58,7 @@ typedef struct _CAS_Data {
 	uint8_t DP_position;
 	weightUnit_t unit;
 	casRxData_t casRxData;
-
+	CAS_Mode_t casMode;
 }CAS_Data_t;
 
 extern CAS_Data_t casData;

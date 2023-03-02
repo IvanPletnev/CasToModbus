@@ -81,11 +81,9 @@ uint8_t modbusParcer (uint8_t * buffer, uint8_t len, modbusData_t *modData){
 					modData->modbusResp[4] = (uint8_t)(loTempWord & 0x00FF);
 					modData->modbusResp[5] = (uint8_t)((hiTempWord & 0xFF00) >> 8);
 					modData->modbusResp[6] = (uint8_t)(hiTempWord & 0x00FF);
-					modData->modbusResp[7] = 0x00;
-					modData->modbusResp[8] = (uint8_t)casData.stability;
-					respCrc = ModbusRTU_CRC(modData->modbusResp, 9);
-					modData->modbusResp[9] = (uint8_t)((respCrc & 0xFF00) >> 8);
-					modData->modbusResp[10] = (uint8_t)(respCrc & 0x00FF);
+					respCrc = ModbusRTU_CRC(modData->modbusResp, 7);
+					modData->modbusResp[8] = (uint8_t)((respCrc & 0xFF00) >> 8);
+					modData->modbusResp[9] = (uint8_t)(respCrc & 0x00FF);
 					setTxMode();
 //					HAL_UART_Transmit_DMA(&huart2, modData->modbusResp, 11);
 					break;
@@ -114,7 +112,6 @@ uint8_t modbusParcer (uint8_t * buffer, uint8_t len, modbusData_t *modData){
 					respCrc = ModbusRTU_CRC(modData->modbusResp, 8);
 					modData->modbusResp[6] = (uint8_t)((respCrc & 0xFF00) >> 8);
 					modData->modbusResp[7] = (uint8_t)(respCrc & 0x00FF);
-
 					break;
 				}
 				break;

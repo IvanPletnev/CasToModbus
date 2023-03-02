@@ -41,9 +41,13 @@ typedef struct _modbusData {
 	modbusRequest_t request;
 	uint8_t modbusResp[32];
 	modbusRxData_t rxData;
+	uint8_t deviceId;
+	uint16_t baudRate;
 }modbusData_t;
 
 extern modbusData_t modbusData;
 
+void setTxMode (void);
+void setRxMode (void);
 
 #endif /* INC_MODBUS_H_ */
