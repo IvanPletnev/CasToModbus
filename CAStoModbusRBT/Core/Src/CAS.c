@@ -24,8 +24,8 @@ extern TIM_HandleTypeDef htim2;
 const char weightReqString[] = "D01KW\r\n";
 const char zeroReqString[] = "D01KZ\r\n";
 
-const char okString[] = "OK\r\n";
 const char errorString[] = "ERROR, please try again\r\n";
+
 uint8_t settingsState = 0;
 
 UART_Status_t uart1status = READY;
