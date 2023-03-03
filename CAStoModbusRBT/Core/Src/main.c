@@ -87,6 +87,18 @@ const osThreadAttr_t uartTx_attributes = {
   .stack_size = sizeof(casTxBuffer),
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for modbus */
+osThreadId_t modbusHandle;
+uint32_t modbusBuffer[ 128 ];
+osStaticThreadDef_t modbusControlBlock;
+const osThreadAttr_t modbus_attributes = {
+  .name = "modbus",
+  .cb_mem = &modbusControlBlock,
+  .cb_size = sizeof(modbusControlBlock),
+  .stack_mem = &modbusBuffer[0],
+  .stack_size = sizeof(modbusBuffer),
+  .priority = (osPriority_t) osPriorityNormal,
+};
 /* Definitions for casRx */
 osMessageQueueId_t casRxHandle;
 uint8_t casRxBuf[ 4 * sizeof( casRxData_t ) ];
@@ -97,6 +109,17 @@ const osMessageQueueAttr_t casRx_attributes = {
   .cb_size = sizeof(casRxControlBlock),
   .mq_mem = &casRxBuf,
   .mq_size = sizeof(casRxBuf)
+};
+/* Definitions for modbusRx */
+osMessageQueueId_t modbusRxHandle;
+uint8_t modbusRxBuffer[ 4 * sizeof( modbusRxData_t ) ];
+osStaticMessageQDef_t modbusRxControlBlock;
+const osMessageQueueAttr_t modbusRx_attributes = {
+  .name = "modbusRx",
+  .cb_mem = &modbusRxControlBlock,
+  .cb_size = sizeof(modbusRxControlBlock),
+  .mq_mem = &modbusRxBuffer,
+  .mq_size = sizeof(modbusRxBuffer)
 };
 /* USER CODE BEGIN PV */
 
@@ -114,6 +137,7 @@ static void MX_TIM2_Init(void);
 void StartDefaultTask(void *argument);
 extern void casTask(void *argument);
 extern void uartTxTask(void *argument);
+extern void modbusTask(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -183,6 +207,9 @@ int main(void)
   /* creation of casRx */
   casRxHandle = osMessageQueueNew (4, sizeof(casRxData_t), &casRx_attributes);
 
+  /* creation of modbusRx */
+  modbusRxHandle = osMessageQueueNew (4, sizeof(modbusRxData_t), &modbusRx_attributes);
+
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
@@ -196,6 +223,9 @@ int main(void)
 
   /* creation of uartTx */
   uartTxHandle = osThreadNew(uartTxTask, NULL, &uartTx_attributes);
+
+  /* creation of modbus */
+  modbusHandle = osThreadNew(modbusTask, (void*) &modbusData, &modbus_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */

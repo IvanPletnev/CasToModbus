@@ -63,6 +63,7 @@ typedef struct _CAS_Data {
 
 extern CAS_Data_t casData;
 extern UART_Status_t uart1status;
+extern UART_Status_t uart2status;
 
 uint8_t CAS_Parcer (CAS_Data_t *data, casRxData_t *source);
 void uartTxTask (void *argument);

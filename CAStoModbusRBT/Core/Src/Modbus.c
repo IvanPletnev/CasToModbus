@@ -6,11 +6,14 @@
  */
 
 #include "Modbus.h"
+#include "cmsis_os.h"
 
 modbusData_t modbusData;
 uint8_t errorResponse[16] = {0};
 extern CAS_Data_t casData;
 extern UART_HandleTypeDef huart2;
+extern osThreadId_t uartTxHandle;
+extern osMessageQueueId_t modbusRxHandle;
 
 uint16_t ModbusRTU_CRC(uint8_t * buf, uint8_t len) {
 	uint16_t crc = 0xFFFF;
@@ -51,7 +54,7 @@ uint8_t modbusParcer (uint8_t * buffer, uint8_t len, modbusData_t *modData){
 	uint16_t respCrc = 0;
 	uint8_t errorCode = 0;
 
-	if (buffer[0] != MODBUS_SLAVE_ADDRESS) {
+	if (buffer[0] != modData->settings.deviceId) {
 		return 0;
 	} else {
 		modData->request.slave_ID = buffer[0];
@@ -68,13 +71,11 @@ uint8_t modbusParcer (uint8_t * buffer, uint8_t len, modbusData_t *modData){
 			switch (modData->request.functionalCode){
 
 			case 0x04:{
-
 				switch (modData->request.registerAddress) {
-
-				case 0: {
+				case 0x00: {
 					modData->modbusResp[0] = modData->request.slave_ID;
 					modData->modbusResp[1] = 0x04;
-					modData->modbusResp[2] = 0x06;
+					modData->modbusResp[2] = 0x04;
 					hiTempWord = (uint16_t)((casData.weightValue & 0xFFFF0000) >> 16);
 					loTempWord = (uint16_t) (casData.weightValue & 0x0000FFFF);
 					modData->modbusResp[3] = (uint8_t)((loTempWord & 0xFF00) >> 8);
@@ -84,11 +85,10 @@ uint8_t modbusParcer (uint8_t * buffer, uint8_t len, modbusData_t *modData){
 					respCrc = ModbusRTU_CRC(modData->modbusResp, 7);
 					modData->modbusResp[8] = (uint8_t)((respCrc & 0xFF00) >> 8);
 					modData->modbusResp[9] = (uint8_t)(respCrc & 0x00FF);
-					setTxMode();
-//					HAL_UART_Transmit_DMA(&huart2, modData->modbusResp, 11);
+					modData->modbusResponseSize = 10;
+					osThreadFlagsSet(uartTxHandle, 0x04);
 					break;
 				}
-
 				default:
 					errorCode = 0x02;
 					break;
@@ -97,21 +97,23 @@ uint8_t modbusParcer (uint8_t * buffer, uint8_t len, modbusData_t *modData){
 			}
 			case 0x05: {
 				switch (modData->request.registerAddress) {
-				case 0:
-
+				case 0x00:
 					modData->modbusResp[0] = modData->request.slave_ID;
 					modData->modbusResp[1] = 0x05;
+					modData->modbusResp[2] = buffer[2];
 					modData->modbusResp[3] = buffer[3];
 					if (buffer[4] == 0xFF) {
 						modData->modbusResp[4] = 0xFF;
-						//Сюда добавить посылку в CAS
+						osThreadFlagsSet(uartTxHandle, 0x02);
 					} else {
 						modData->modbusResp[4] = 0;
 					}
 					modData->modbusResp[5] = 0;
-					respCrc = ModbusRTU_CRC(modData->modbusResp, 8);
+					respCrc = ModbusRTU_CRC(modData->modbusResp, 6);
 					modData->modbusResp[6] = (uint8_t)((respCrc & 0xFF00) >> 8);
 					modData->modbusResp[7] = (uint8_t)(respCrc & 0x00FF);
+					modData->modbusResponseSize = 8;
+					osThreadFlagsSet(uartTxHandle, 0x04);
 					break;
 				}
 				break;
@@ -120,7 +122,29 @@ uint8_t modbusParcer (uint8_t * buffer, uint8_t len, modbusData_t *modData){
 				errorCode = 0x01;
 				break;
 			}
+			if (errorCode) {
+				modData->modbusResp[0] = modData->request.slave_ID;
+				modData->modbusResp[1] = modData->request.functionalCode | 0x80;
+				modData->modbusResp[2] = errorCode;
+				respCrc = ModbusRTU_CRC(modData->modbusResp, 3);
+				modData->modbusResp[3] = (uint8_t)((respCrc & 0xFF00) >> 8);
+				modData->modbusResp[4] = (uint8_t)(respCrc & 0x00FF);
+				osThreadFlagsSet(uartTxHandle, 0x04);
+			}
 		}
 	}
 	return 1;
+}
+
+void modbusTask (void* argument) {
+
+	volatile modbusData_t *modbus;
+	modbus = (modbusData_t*) argument;
+
+	for (;;) {
+		if (osMessageQueueGet(modbusRxHandle, (modbusRxData_t*)&modbus->rxData, 0, osWaitForever) == osOK){
+			modbusParcer((uint8_t*)&modbus->rxData.modbusRxBuffer , modbus->rxData.modbusRxSize, (modbusData_t*) &modbus);
+			osThreadYield();
+		}
+	}
 }

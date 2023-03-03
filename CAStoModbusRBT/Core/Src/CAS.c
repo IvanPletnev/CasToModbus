@@ -12,9 +12,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "cmsis_os.h"
+#include "eeprom.h"
 
 CAS_Data_t casData = {0};
 extern osMessageQueueId_t casRxHandle;
+extern osMessageQueueId_t modbusRxHandle;
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 extern TIM_HandleTypeDef htim2;
@@ -28,6 +30,7 @@ uint8_t settingsState = 0;
 
 
 UART_Status_t uart1status = READY;
+UART_Status_t uart2status = READY;
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
@@ -37,7 +40,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 		HAL_UARTEx_ReceiveToIdle_DMA(huart, casData.casRxData.casRxBuffer, 64);
 	} else if (huart->Instance == USART2) {
 		modbusData.rxData.modbusRxSize = Size;
-		modbusData.rxData.modbusRxFlag = 1;
+		osMessageQueuePut(modbusRxHandle, &modbusData.rxData, 0, 0);
 		HAL_UARTEx_ReceiveToIdle_DMA(huart, modbusData.rxData.modbusRxBuffer, 64);
 	}
 }
@@ -121,7 +124,7 @@ void casSettings (casRxData_t *buffer, modbusData_t *modBus) {
 			settingsState = 1;
 			return;
 		} else if (strncmp((const char*)buffer->casRxBuffer, "ID\r\n", 4) == 0) {
-			len = sprintf((char*)tempBuf, "--Current ID %d\r\nEnter new ID:\r\n", modBus->deviceId);
+			len = sprintf((char*)tempBuf, "--Current ID %d\r\nEnter new ID:\r\n", modBus->settings.deviceId);
 			HAL_UART_Transmit(&huart1, tempBuf, len, 100);
 			settingsState = 2;
 			return;
@@ -129,6 +132,7 @@ void casSettings (casRxData_t *buffer, modbusData_t *modBus) {
 			HAL_UART_Transmit(&huart1, (uint8_t*)"Save and reset?\r\n", strlen("Save and reset?\r\n"), 100);
 			HAL_UART_Transmit(&huart1, (uint8_t*)"Press y or n\r\n", strlen("Press Y or N\r\n"), 100);
 			settingsState = 3;
+			return;
 		} else {
 			HAL_UART_Transmit(&huart1, (uint8_t*)errorString, strlen(errorString), 100);
 		}
@@ -136,7 +140,7 @@ void casSettings (casRxData_t *buffer, modbusData_t *modBus) {
 	if (settingsState == 1) {
 		if ((baudRate = atol ((const char *)buffer->casRxBuffer)) != 0){
 			huart2.Init.BaudRate = baudRate;
-			modBus->baudRate = baudRate;
+			modBus->settings.baudRate = baudRate;
 			len = sprintf((char*)tempBuf, "----OK. Current BaudRate %lu\r\n\r\n", huart2.Init.BaudRate);
 			HAL_UART_Transmit(&huart1, tempBuf, len, 100);
 			HAL_UART_Transmit(&huart1, (uint8_t*)"SETTINGS MODE\r\n", strlen("SETTINGS MODE\r\n"), 100);
@@ -149,20 +153,24 @@ void casSettings (casRxData_t *buffer, modbusData_t *modBus) {
 	}
 	if (settingsState == 2) {
 		if ((deviceID = (uint8_t) atoi((const char *)buffer->casRxBuffer)) != 0){
-			modBus->deviceId = deviceID;
+			modBus->settings.deviceId = deviceID;
 			len = sprintf((char*)tempBuf, "----OK. Current ID %d\r\n\r\n", deviceID);
 			HAL_UART_Transmit(&huart1, tempBuf, len, 100);
 			HAL_UART_Transmit(&huart1, (uint8_t*)"SETTINGS MODE\r\n", strlen("SETTINGS MODE\r\n"), 100);
 			settingsState = 0;
+			return;
 		}
 	}
 	if (settingsState ==3) {
 		if (strncmp ((const char*)buffer->casRxBuffer, "y\r\n", 3) == 0 || strncmp ((const char*)buffer->casRxBuffer, "Y\r\n", 3) == 0){
 			HAL_UART_Transmit(&huart1, (uint8_t*)"Save...", strlen("Save..."), 100);
+			eepromWrite((uint8_t*)&modBus->settings, sizeof(modbusSettings_t));
+			osDelay(100);
 			NVIC_SystemReset();
 		} else if (strncmp ((const char*)buffer->casRxBuffer, "n\r\n", 3) == 0 || strncmp ((const char*)buffer->casRxBuffer, "N\r\n", 3) == 0){
 			HAL_UART_Transmit(&huart1, (uint8_t*)"SETTINGS MODE\r\n", strlen("SETTINGS MODE\r\n"), 100);
 			settingsState = 0;
+			return;
 		}
 	}
 }
@@ -188,21 +196,28 @@ void casTask (void *argument) {
 
 void uartTxTask (void *argument) {
 
-	uint32_t flag = 0;
+	uint32_t flag1 = 0;
+	uint32_t flag2 = 0;
 
 	for (;;) {
 
 		if (uart1status == READY) {
-			flag = osThreadFlagsWait(0x03, osFlagsWaitAny, 1);
-			if (flag & 0x01) {
+			flag1 = osThreadFlagsWait(0x03, osFlagsWaitAny, 1);
+			if (flag1 & 0x01) {
 				uart1status = BUSY;
 				HAL_UART_Transmit_DMA(&huart1, (uint8_t *) weightReqString, strlen (weightReqString));
-			} else if (flag & 0x02){
+			} else if (flag1 & 0x02){
 				uart1status = BUSY;
 				HAL_UART_Transmit_DMA(&huart1, (uint8_t *) zeroReqString, strlen (zeroReqString));
 			}
-		} else {
-			osDelay(1);
+		}
+		if (uart2status == READY) {
+			flag2 = osThreadFlagsWait(0x0C, osFlagsWaitAny, 1);
+			if (flag2 & 0x04) {
+				uart2status = BUSY;
+				setTxMode();
+				HAL_UART_Transmit_DMA(&huart2, (uint8_t*)&modbusData.modbusResp, modbusData.modbusResponseSize);
+			}
 		}
 	}
 }

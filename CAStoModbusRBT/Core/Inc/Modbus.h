@@ -9,6 +9,7 @@
 #define INC_MODBUS_H_
 
 #include "main.h"
+#include "cmsis_os.h"
 #include "CAS.h"
 
 
@@ -23,7 +24,7 @@
 #define WRITE_MULTIPLE_DO	0x0F
 #define	WRITE_MULTIPLE_AO	0x10
 
-typedef struct _modbusRequest {
+typedef struct __attribute__((__packed__)) _modbusRequest {
 	uint8_t slave_ID;
 	uint8_t functionalCode;
 	uint16_t registerAddress;
@@ -31,18 +32,22 @@ typedef struct _modbusRequest {
 	uint16_t crc;
 }modbusRequest_t;
 
-typedef struct _modbusRxData {
+typedef struct __attribute__((__packed__)) _modbusRxData {
 	uint8_t modbusRxBuffer[64];
 	uint8_t modbusRxSize;
-	uint8_t modbusRxFlag;
 }modbusRxData_t;
 
-typedef struct _modbusData {
-	modbusRequest_t request;
-	uint8_t modbusResp[32];
-	modbusRxData_t rxData;
+typedef struct __attribute__((__packed__))_modbusSettings {
 	uint8_t deviceId;
 	uint16_t baudRate;
+}modbusSettings_t;
+
+typedef struct __attribute__((__packed__)) _modbusData {
+	modbusRequest_t request;
+	uint8_t modbusResp[32];
+	uint8_t modbusResponseSize;
+	modbusRxData_t rxData;
+	modbusSettings_t settings;
 }modbusData_t;
 
 extern modbusData_t modbusData;
