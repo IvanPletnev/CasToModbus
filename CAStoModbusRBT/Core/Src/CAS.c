@@ -28,7 +28,6 @@ const char okString[] = "OK\r\n";
 const char errorString[] = "ERROR, please try again\r\n";
 uint8_t settingsState = 0;
 
-
 UART_Status_t uart1status = READY;
 UART_Status_t uart2status = READY;
 

@@ -9,7 +9,6 @@
 #include "cmsis_os.h"
 
 modbusData_t modbusData;
-uint8_t errorResponse[16] = {0};
 extern CAS_Data_t casData;
 extern UART_HandleTypeDef huart2;
 extern osThreadId_t uartTxHandle;
