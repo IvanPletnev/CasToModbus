@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 #include "CAS.h"
 #include "Modbus.h"
+#include "eeprom.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -55,6 +56,8 @@ DMA_HandleTypeDef hdma_usart1_rx;
 DMA_HandleTypeDef hdma_usart1_tx;
 DMA_HandleTypeDef hdma_usart2_rx;
 DMA_HandleTypeDef hdma_usart2_tx;
+DMA_HandleTypeDef hdma_usart3_rx;
+DMA_HandleTypeDef hdma_usart3_tx;
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -85,7 +88,7 @@ const osThreadAttr_t uartTx_attributes = {
   .cb_size = sizeof(casTxControlBlock),
   .stack_mem = &casTxBuffer[0],
   .stack_size = sizeof(casTxBuffer),
-  .priority = (osPriority_t) osPriorityNormal,
+  .priority = (osPriority_t) osPriorityNormal3,
 };
 /* Definitions for modbus */
 osThreadId_t modbusHandle;
@@ -122,7 +125,8 @@ const osMessageQueueAttr_t modbusRx_attributes = {
   .mq_size = sizeof(modbusRxBuffer)
 };
 /* USER CODE BEGIN PV */
-
+uint8_t zeroFlag = 0;
+uint16_t ledStatusCounter = 999;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -161,7 +165,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+	HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -185,7 +189,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_UARTEx_ReceiveToIdle_DMA(&huart1, casData.casRxData.casRxBuffer, 64);
   HAL_UARTEx_ReceiveToIdle_DMA(&huart2, modbusData.rxData.modbusRxBuffer, 64);
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart3, casData.casRxData.casRxBuffer, 64);
   HAL_TIM_Base_Start_IT(&htim2);
+  setRxMode();
+  modbusData.settings.deviceId = 0x01;
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -384,7 +391,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 9600;
+  huart1.Init.BaudRate = 19200;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -417,7 +424,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
+  huart2.Init.BaudRate = 19200;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -477,6 +484,12 @@ static void MX_DMA_Init(void)
   __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
+  /* DMA1_Channel2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+  /* DMA1_Channel3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
   /* DMA1_Channel4_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
@@ -507,7 +520,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, DE_Pin|RE_Pin|IFMODE_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, DE_Pin|RE_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(IFMODE_GPIO_Port, IFMODE_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
@@ -556,6 +572,10 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
+	  if(zeroFlag) {
+		  zeroFlag = 0;
+		  eepromWrite((uint8_t*)&modbusData.settings, sizeof (modbusSettings_t));
+	  }
     osDelay(1);
   }
   /* USER CODE END 5 */
@@ -580,7 +600,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   }
   /* USER CODE BEGIN Callback 1 */
   if (htim->Instance == TIM4) {
-	  if (ledCounter++ > 999) {
+	  if (ledCounter++ > ledStatusCounter) {
 		  ledCounter = 0;
 		  HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
 		  HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);

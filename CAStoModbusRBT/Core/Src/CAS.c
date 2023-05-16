@@ -19,7 +19,9 @@ extern osMessageQueueId_t casRxHandle;
 extern osMessageQueueId_t modbusRxHandle;
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
+extern UART_HandleTypeDef huart3;
 extern TIM_HandleTypeDef htim2;
+extern uint16_t ledStatusCounter;
 
 const char weightReqString[] = "D01KW\r\n";
 const char zeroReqString[] = "D01KZ\r\n";
@@ -41,6 +43,10 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 		modbusData.rxData.modbusRxSize = Size;
 		osMessageQueuePut(modbusRxHandle, &modbusData.rxData, 0, 0);
 		HAL_UARTEx_ReceiveToIdle_DMA(huart, modbusData.rxData.modbusRxBuffer, 64);
+	} else 	if (huart->Instance == USART3){
+		casData.casRxData.casRxSize = Size;
+		osMessageQueuePut(casRxHandle, &casData.casRxData, 0, 0);
+		HAL_UARTEx_ReceiveToIdle_DMA(huart, casData.casRxData.casRxBuffer, 64);
 	}
 }
 
@@ -58,10 +64,13 @@ uint8_t CAS_Parcer (CAS_Data_t *data, casRxData_t *source){
 		data->stability = STABLE;
 	} else if (strncmp((const char*)source->casRxBuffer,"OL", 2) == 0) {
 		data->stability = OVERLOAD;
-	} else if (strncmp((const char*)source->casRxBuffer,"SET/r/n", 5) == 0){
+	} else if (strncmp((const char*)source->casRxBuffer,"SET", 3) == 0){
 		data->casMode = CAS_SETTINGS;
+		HAL_UART_AbortTransmit(&huart1);
 		HAL_TIM_Base_Stop_IT(&htim2);
+		ledStatusCounter = 199;
 		HAL_UART_Transmit(&huart1, (uint8_t*)"SETTINGS MODE\r\n", strlen("SETTINGS MODE\r\n"), 100);
+		return 1;
 	}
 
 	if (strncmp((const char*)source->casRxBuffer + 3,"GS", 2) == 0) {
@@ -123,7 +132,7 @@ void casSettings (casRxData_t *buffer, modbusData_t *modBus) {
 			settingsState = 1;
 			return;
 		} else if (strncmp((const char*)buffer->casRxBuffer, "ID\r\n", 4) == 0) {
-			len = sprintf((char*)tempBuf, "--Current ID %d\r\nEnter new ID:\r\n", modBus->settings.deviceId);
+			len = sprintf((char*)tempBuf, "--Current ID %lu\r\nEnter new ID:\r\n", modBus->settings.deviceId);
 			HAL_UART_Transmit(&huart1, tempBuf, len, 100);
 			settingsState = 2;
 			return;
@@ -179,7 +188,12 @@ void casTask (void *argument) {
 	casRxData_t casBuf;
 	volatile CAS_Data_t *cas;
 	cas = (CAS_Data_t *) argument;
-
+	ledStatusCounter = 999;
+	osDelay(10);
+	eepromRead((uint8_t*)&modbusData.settings, sizeof(modbusSettings_t));
+	huart2.Init.BaudRate = modbusData.settings.baudRate;
+	HAL_UART_Init(&huart2);
+	osDelay(10);
 	for(;;) {
 
 		if (osMessageQueueGet(casRxHandle, (casRxData_t*)&casBuf, 0, osWaitForever) == osOK) {
@@ -196,27 +210,21 @@ void casTask (void *argument) {
 void uartTxTask (void *argument) {
 
 	uint32_t flag1 = 0;
-	uint32_t flag2 = 0;
 
 	for (;;) {
 
-		if (uart1status == READY) {
-			flag1 = osThreadFlagsWait(0x03, osFlagsWaitAny, 1);
-			if (flag1 & 0x01) {
-				uart1status = BUSY;
-				HAL_UART_Transmit_DMA(&huart1, (uint8_t *) weightReqString, strlen (weightReqString));
-			} else if (flag1 & 0x02){
-				uart1status = BUSY;
-				HAL_UART_Transmit_DMA(&huart1, (uint8_t *) zeroReqString, strlen (zeroReqString));
-			}
-		}
-		if (uart2status == READY) {
-			flag2 = osThreadFlagsWait(0x0C, osFlagsWaitAny, 1);
-			if (flag2 & 0x04) {
-				uart2status = BUSY;
-				setTxMode();
-				HAL_UART_Transmit_DMA(&huart2, (uint8_t*)&modbusData.modbusResp, modbusData.modbusResponseSize);
-			}
+		flag1 = osThreadFlagsWait(0x07, osFlagsWaitAny, osWaitForever);
+		if (flag1 == 0x01) {
+			uart1status = BUSY;
+			HAL_UART_Transmit_DMA(&huart1, (uint8_t *) weightReqString, strlen (weightReqString));
+		} else if (flag1 == 0x02){
+			uart1status = BUSY;
+			HAL_UART_Transmit_DMA(&huart1, (uint8_t *) zeroReqString, strlen (zeroReqString));
+			HAL_TIM_Base_Start_IT(&htim2);
+		} else if (flag1 == 0x04) {
+			uart2status = BUSY;
+			setTxMode();
+			HAL_UART_Transmit_DMA(&huart2, (uint8_t*)&modbusData.modbusResp, modbusData.modbusResponseSize);
 		}
 	}
 }

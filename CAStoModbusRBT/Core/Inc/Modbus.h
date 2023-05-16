@@ -38,8 +38,8 @@ typedef struct __attribute__((__packed__)) _modbusRxData {
 }modbusRxData_t;
 
 typedef struct __attribute__((__packed__))_modbusSettings {
-	uint16_t deviceId;
-	uint16_t baudRate;
+	uint32_t deviceId;
+	uint32_t baudRate;
 }modbusSettings_t;
 
 typedef struct __attribute__((__packed__)) _modbusData {
