@@ -44,6 +44,27 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 	}
 }
 
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+	if ((__HAL_UART_GET_FLAG(huart, UART_FLAG_ORE) != RESET) ||
+			(__HAL_UART_GET_FLAG(huart, UART_FLAG_FE) != RESET) ||
+					(__HAL_UART_GET_FLAG(huart, UART_FLAG_NE) != RESET) ||
+						(__HAL_UART_GET_FLAG(huart, UART_FLAG_PE) != RESET)){
+		huart->Instance->DR;
+	}
+	if (huart->Instance == USART1){
+		HAL_UART_AbortReceive(&huart1);
+		HAL_UART_AbortTransmit(&huart1);
+		HAL_UARTEx_ReceiveToIdle_DMA(huart, casData.casRxData.casRxBuffer, 64);
+	}
+
+	if (huart->Instance == USART2){
+		HAL_UART_AbortReceive(&huart2);
+		HAL_UART_AbortTransmit(&huart2);
+		HAL_UARTEx_ReceiveToIdle_DMA(huart, modbusData.rxData.modbusRxBuffer, 64);
+	}
+}
+
 uint8_t CAS_Parcer (CAS_Data_t *data, casRxData_t *source){
 
 	uint8_t i = 0;
