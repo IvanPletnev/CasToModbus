@@ -56,12 +56,14 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 		HAL_UART_AbortReceive(&huart1);
 		HAL_UART_AbortTransmit(&huart1);
 		HAL_UARTEx_ReceiveToIdle_DMA(huart, casData.casRxData.casRxBuffer, 64);
+		uart1status = READY;
 	}
 
 	if (huart->Instance == USART2){
 		HAL_UART_AbortReceive(&huart2);
 		HAL_UART_AbortTransmit(&huart2);
 		HAL_UARTEx_ReceiveToIdle_DMA(huart, modbusData.rxData.modbusRxBuffer, 64);
+		uart2status = READY;
 	}
 }
 
@@ -126,7 +128,6 @@ uint8_t CAS_Parcer (CAS_Data_t *data, casRxData_t *source){
 	} else {
 		//error handler
 	}
-
 	return 1;
 }
 
@@ -221,23 +222,20 @@ void uartTxTask (void *argument) {
 
 	for (;;) {
 
-		if (uart1status == READY) {
-			flag1 = osThreadFlagsWait(0x03, osFlagsWaitAny, 1);
-			if (flag1 & 0x01) {
-				uart1status = BUSY;
-				HAL_UART_Transmit_DMA(&huart1, (uint8_t *) weightReqString, strlen (weightReqString));
-			} else if (flag1 & 0x02){
-				uart1status = BUSY;
-				HAL_UART_Transmit_DMA(&huart1, (uint8_t *) zeroReqString, strlen (zeroReqString));
-			}
+		flag1 = osThreadFlagsWait(0x03, osFlagsWaitAny, 1);
+		if (flag1 & 0x01) {
+			uart1status = BUSY;
+			HAL_UART_Transmit_DMA(&huart1, (uint8_t *) weightReqString, strlen (weightReqString));
+		} else if (flag1 & 0x02){
+			uart1status = BUSY;
+			HAL_UART_Transmit_DMA(&huart1, (uint8_t *) zeroReqString, strlen (zeroReqString));
 		}
-		if (uart2status == READY) {
-			flag2 = osThreadFlagsWait(0x0C, osFlagsWaitAny, 1);
-			if (flag2 & 0x04) {
-				uart2status = BUSY;
-				setTxMode();
-				HAL_UART_Transmit_DMA(&huart2, (uint8_t*)&modbusData.modbusResp, modbusData.modbusResponseSize);
-			}
+
+		flag2 = osThreadFlagsWait(0x0C, osFlagsWaitAny, 1);
+		if (flag2 & 0x04) {
+			uart2status = BUSY;
+			setTxMode();
+			HAL_UART_Transmit_DMA(&huart2, (uint8_t*)&modbusData.modbusResp, modbusData.modbusResponseSize);
 		}
 	}
 }
