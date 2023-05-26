@@ -9,8 +9,8 @@
 #include "cmsis_os.h"
 #include "main.h"
 
-modbusData_t modbusData;
-extern CAS_Data_t casData;
+volatile modbusData_t modbusData;
+extern volatile CAS_Data_t casData;
 extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart1;
 extern osThreadId_t uartTxHandle;
@@ -19,7 +19,6 @@ extern TIM_HandleTypeDef htim2;
 
 uint16_t ModbusRTU_CRC(uint8_t * buf, uint8_t len) {
 	uint16_t crc = 0xFFFF;
-	uint16_t crcSwapped = 0x00;
 
   for (uint8_t pos = 0; pos < len; pos++) {
     crc ^= buf[pos];          // XOR byte into least sig. byte of crc
@@ -33,9 +32,6 @@ uint16_t ModbusRTU_CRC(uint8_t * buf, uint8_t len) {
         crc >>= 1;                    // Just shift right
     }
   }
-  // Note, this number has low and high bytes swapped, so use it accordingly (or swap bytes)
-//  crcSwapped = (crc&0x00FF) << 8;
-//  crcSwapped = (crc&0XFF00) >> 8;
   return crc;
 }
 

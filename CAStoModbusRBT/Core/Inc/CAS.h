@@ -61,7 +61,7 @@ typedef struct _CAS_Data {
 	CAS_Mode_t casMode;
 }CAS_Data_t;
 
-extern CAS_Data_t casData;
+extern volatile CAS_Data_t casData;
 extern UART_Status_t uart1status;
 extern UART_Status_t uart2status;
 

@@ -50,7 +50,7 @@ typedef struct __attribute__((__packed__)) _modbusData {
 	modbusSettings_t settings;
 }modbusData_t;
 
-extern modbusData_t modbusData;
+extern volatile modbusData_t modbusData;
 
 void setTxMode (void);
 void setRxMode (void);

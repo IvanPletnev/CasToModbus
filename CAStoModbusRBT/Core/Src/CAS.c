@@ -14,7 +14,7 @@
 #include "cmsis_os.h"
 #include "eeprom.h"
 
-CAS_Data_t casData = {0};
+volatile CAS_Data_t casData = {0};
 extern osMessageQueueId_t casRxHandle;
 extern osMessageQueueId_t modbusRxHandle;
 extern UART_HandleTypeDef huart1;
@@ -37,16 +37,16 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
 	if (huart->Instance == USART1){
 		casData.casRxData.casRxSize = Size;
-		osMessageQueuePut(casRxHandle, &casData.casRxData, 0, 0);
-		HAL_UARTEx_ReceiveToIdle_DMA(huart, casData.casRxData.casRxBuffer, 64);
+		osMessageQueuePut(casRxHandle, (const void *)&casData.casRxData, 0, 0);
+		HAL_UARTEx_ReceiveToIdle_DMA(huart, (uint8_t *)casData.casRxData.casRxBuffer, 64);
 	} else if (huart->Instance == USART2) {
 		modbusData.rxData.modbusRxSize = Size;
-		osMessageQueuePut(modbusRxHandle, &modbusData.rxData, 0, 0);
-		HAL_UARTEx_ReceiveToIdle_DMA(huart, modbusData.rxData.modbusRxBuffer, 64);
+		osMessageQueuePut(modbusRxHandle, (const void *)&modbusData.rxData, 0, 0);
+		HAL_UARTEx_ReceiveToIdle_DMA(huart, (uint8_t*)modbusData.rxData.modbusRxBuffer, 64);
 	} else 	if (huart->Instance == USART3){
 		casData.casRxData.casRxSize = Size;
-		osMessageQueuePut(casRxHandle, &casData.casRxData, 0, 0);
-		HAL_UARTEx_ReceiveToIdle_DMA(huart, casData.casRxData.casRxBuffer, 64);
+		osMessageQueuePut(casRxHandle, (const void *)&casData.casRxData, 0, 0);
+		HAL_UARTEx_ReceiveToIdle_DMA(huart, (uint8_t *)casData.casRxData.casRxBuffer, 64);
 	}
 }
 
@@ -61,14 +61,14 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 	if (huart->Instance == USART1){
 		HAL_UART_AbortReceive(&huart1);
 		HAL_UART_AbortTransmit(&huart1);
-		HAL_UARTEx_ReceiveToIdle_DMA(huart, casData.casRxData.casRxBuffer, 64);
+		HAL_UARTEx_ReceiveToIdle_DMA(huart, (uint8_t*)casData.casRxData.casRxBuffer, 64);
 		uart1status = READY;
 	}
 
 	if (huart->Instance == USART2){
 		HAL_UART_AbortReceive(&huart2);
 		HAL_UART_AbortTransmit(&huart2);
-		HAL_UARTEx_ReceiveToIdle_DMA(huart, modbusData.rxData.modbusRxBuffer, 64);
+		HAL_UARTEx_ReceiveToIdle_DMA(huart, (uint8_t*)modbusData.rxData.modbusRxBuffer, 64);
 		uart2status = READY;
 	}
 }
@@ -109,6 +109,7 @@ uint8_t CAS_Parcer (CAS_Data_t *data, casRxData_t *source){
 	memcpy((uint8_t*)weightBuffer, (uint8_t*) source->casRxBuffer + 9, 8);
 	i = j = 0;
 	data->DP_position = 0;
+
 	for (i = 0; i < 8; ) {
 		if (weightBuffer[i] == '-') {
 			weightSign = 1;
@@ -191,7 +192,7 @@ void casSettings (casRxData_t *buffer, modbusData_t *modBus) {
 			return;
 		}
 	}
-	if (settingsState ==3) {
+	if (settingsState == 3) {
 		if (strncmp ((const char*)buffer->casRxBuffer, "y\r\n", 3) == 0 || strncmp ((const char*)buffer->casRxBuffer, "Y\r\n", 3) == 0){
 			HAL_UART_Transmit(&huart1, (uint8_t*)"Save...", strlen("Save..."), 100);
 			eepromWrite((uint8_t*)&modBus->settings, sizeof(modbusSettings_t));
@@ -211,18 +212,14 @@ void casTask (void *argument) {
 	volatile CAS_Data_t *cas;
 	cas = (CAS_Data_t *) argument;
 	ledStatusCounter = 999;
-	osDelay(10);
-	eepromRead((uint8_t*)&modbusData.settings, sizeof(modbusSettings_t));
-	huart2.Init.BaudRate = modbusData.settings.baudRate;
-	HAL_UART_Init(&huart2);
-	osDelay(10);
+
 	for(;;) {
 
 		if (osMessageQueueGet(casRxHandle, (casRxData_t*)&casBuf, 0, osWaitForever) == osOK) {
 			if (cas->casMode == CAS_WEIGHT) {
 				CAS_Parcer((CAS_Data_t *)cas, &casBuf);
 			} else if (cas->casMode == CAS_SETTINGS) {
-				casSettings(&casBuf, &modbusData);
+				casSettings(&casBuf, (modbusData_t*)&modbusData);
 			}
 			osThreadYield();
 		}
@@ -235,7 +232,6 @@ void uartTxTask (void *argument) {
 
 	for (;;) {
 
-<<<<<<< HEAD
 		flag1 = osThreadFlagsWait(0x07, osFlagsWaitAny, osWaitForever);
 		if (flag1 == 0x01) {
 			uart1status = BUSY;
@@ -245,19 +241,6 @@ void uartTxTask (void *argument) {
 			HAL_UART_Transmit_DMA(&huart1, (uint8_t *) zeroReqString, strlen (zeroReqString));
 			HAL_TIM_Base_Start_IT(&htim2);
 		} else if (flag1 == 0x04) {
-=======
-		flag1 = osThreadFlagsWait(0x03, osFlagsWaitAny, 1);
-		if (flag1 & 0x01) {
-			uart1status = BUSY;
-			HAL_UART_Transmit_DMA(&huart1, (uint8_t *) weightReqString, strlen (weightReqString));
-		} else if (flag1 & 0x02){
-			uart1status = BUSY;
-			HAL_UART_Transmit_DMA(&huart1, (uint8_t *) zeroReqString, strlen (zeroReqString));
-		}
-
-		flag2 = osThreadFlagsWait(0x0C, osFlagsWaitAny, 1);
-		if (flag2 & 0x04) {
->>>>>>> branch 'master' of git@github.com:IvanPletnev/CasToModbus.git
 			uart2status = BUSY;
 			setTxMode();
 			HAL_UART_Transmit_DMA(&huart2, (uint8_t*)&modbusData.modbusResp, modbusData.modbusResponseSize);

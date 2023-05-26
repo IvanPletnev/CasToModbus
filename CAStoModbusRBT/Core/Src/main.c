@@ -165,7 +165,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-	HAL_Init();
+  HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -187,12 +187,17 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, casData.casRxData.casRxBuffer, 64);
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, modbusData.rxData.modbusRxBuffer, 64);
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart3, casData.casRxData.casRxBuffer, 64);
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, (uint8_t *)casData.casRxData.casRxBuffer, 64);
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, (uint8_t *)modbusData.rxData.modbusRxBuffer, 64);
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart3, (uint8_t *)casData.casRxData.casRxBuffer, 64);
   HAL_TIM_Base_Start_IT(&htim2);
   setRxMode();
   modbusData.settings.deviceId = 0x01;
+  HAL_Delay(10);
+  eepromRead((uint8_t*)&modbusData.settings, sizeof(modbusSettings_t));
+  huart2.Init.BaudRate = modbusData.settings.baudRate;
+  HAL_UART_Init(&huart2);
+  HAL_Delay(10);
   /* USER CODE END 2 */
 
   /* Init scheduler */
